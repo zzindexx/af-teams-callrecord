@@ -1,0 +1,15 @@
+{
+  "name": "af-teams-callrecords",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"No tests yet...\""
+  },
+  "dependencies": {
+    "@azure/msal-node": "^1.1.0",
+    "@azure/storage-blob": "^12.5.0",
+    "axios": "^0.21.1"
+  },
+  "devDependencies": {}
+}
