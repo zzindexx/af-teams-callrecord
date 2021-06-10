@@ -36,10 +36,12 @@ module.exports = async function (context, req) {
             context.res = {
                 status: 202
             };
+        } else {
+            context.res = {
+                status: 500
+            };
         }
     }
 
-    context.res = {
-        status: 500
-    };
+    
 }

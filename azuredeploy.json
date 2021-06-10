@@ -1,0 +1,265 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "appName": {
+        "type": "string",
+        "defaultValue": "",
+        "metadata": {
+          "description": "The name of the function app that you wish to create."
+        }
+      },
+      "storageAccountType": {
+        "type": "string",
+        "defaultValue": "Standard_LRS",
+        "allowedValues": [
+          "Standard_LRS",
+          "Standard_GRS",
+          "Standard_RAGRS"
+        ],
+        "metadata": {
+          "description": "Storage Account type"
+        }
+      },
+      "location": {
+        "type": "string",
+        "defaultValue": "[resourceGroup().location]",
+        "metadata": {
+          "description": "Location for all resources."
+        }
+      },
+      "appInsightsLocation": {
+        "type": "string",
+        "defaultValue": "[resourceGroup().location]",
+        "metadata": {
+          "description": "Location for Application Insights"
+        }
+      },
+      "aadEndpoint": {
+        "type": "string",
+        "defaultValue": "https://login.microsoftonline.com/",
+        "metadata": {
+          "description": "Azure AD Url"
+        }
+      },
+      "graphApiEndpoint": {
+        "type": "string",
+        "defaultValue": "https://graph.microsoft.com/",
+        "metadata": {
+          "description": "Graph API Url"
+        }
+      },
+      "clientId": {
+        "type": "string",
+        "defaultValue": "",
+        "metadata": {
+          "description": "Azure AD App Registration Client Id"
+        }
+      },
+      "clientSecret": {
+        "type": "string",
+        "defaultValue": "",
+        "metadata": {
+          "description": "Azure AD App Registration Client Secret"
+        }
+      },
+      "tenantId": {
+        "type": "string",
+        "defaultValue": "",
+        "metadata": {
+          "description": "Azure AD App Registration Directory (tenant) Id"
+        }
+      },
+      "blobConnectionString": {
+        "type": "string",
+        "defaultValue": "",
+        "metadata": {
+          "description": "Connection string to Blob Storage Account"
+        }
+      },
+      "blobContainerName": {
+        "type": "string",
+        "defaultValue": "",
+        "metadata": {
+          "description": "Container name in Blob Storage"
+        }
+      },
+      "subscriptionPeriodInMinutes": {
+        "type": "int",
+        "defaultValue": 1440,
+        "metadata": {
+          "description": "Subscription time in minutes (used while subscribing to Teams notifications)"
+        }
+      },
+      "subscriptionSecret": {
+        "type": "string",
+        "defaultValue": "",
+        "metadata": {
+          "description": "Subscription secret (used while subscribing to Teams notifications)"
+        }
+      },
+      "gitRepoUrl": {
+        "type": "string",
+        "metadata": {
+          "description": "The URL to the GitHub repository to deploy."
+        },
+        "defaultValue": "https://github.com/zzindexx/af-teams-callrecord.git"
+      },
+      "gitBranch": {
+        "type": "string",
+        "metadata": {
+          "description": "The branch of the GitHub repository to deploy."
+        },
+        "defaultValue": "main"
+      }
+    },
+    "variables": {
+      "functionAppName": "[parameters('appName')]",
+      "hostingPlanName": "[parameters('appName')]",
+      "applicationInsightsName": "[parameters('appName')]",
+      "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+      "callbackUrl": "[concat('https://',parameters('appName'), '.azurewebsites.net/api/ProcessCallRecord')]"
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Storage/storageAccounts",
+        "apiVersion": "2019-06-01",
+        "name": "[variables('storageAccountName')]",
+        "location": "[parameters('location')]",
+        "sku": {
+          "name": "[parameters('storageAccountType')]"
+        },
+        "kind": "Storage"
+      },
+      {
+        "type": "Microsoft.Web/serverfarms",
+        "apiVersion": "2020-06-01",
+        "name": "[variables('hostingPlanName')]",
+        "location": "[parameters('location')]",
+        "sku": {
+          "name": "Y1",
+          "tier": "Dynamic"
+        },
+        "properties": {
+          "name": "[variables('hostingPlanName')]",
+          "computeMode": "Dynamic"
+        }
+      },
+      {
+        "type": "Microsoft.Web/sites",
+        "apiVersion": "2020-06-01",
+        "name": "[variables('functionAppName')]",
+        "location": "[parameters('location')]",
+        "kind": "functionapp",
+        "dependsOn": [
+          "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+          "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+        ],
+        "properties": {
+          "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+          "siteConfig": {
+            "appSettings": [
+              {
+                "name": "AzureWebJobsStorage",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+              },
+              {
+                "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+              },
+              {
+                "name": "WEBSITE_CONTENTSHARE",
+                "value": "[toLower(variables('functionAppName'))]"
+              },
+              {
+                "name": "FUNCTIONS_EXTENSION_VERSION",
+                "value": "~3"
+              },
+              {
+                "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                "value": "~12"
+              },
+              {
+                "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
+              },
+              {
+                "name": "FUNCTIONS_WORKER_RUNTIME",
+                "value": "node"
+              },
+              {
+                "name": "AAD_ENDPOINT",
+                "value": "[parameters('aadEndpoint')]"
+              },
+              {
+                "name": "GRAPH_ENDPOINT",
+                "value": "[parameters('graphApiEndpoint')]"
+              },
+              {
+                "name": "CLIENT_ID",
+                "value": "[parameters('clientId')]"
+              },
+              {
+                "name": "CLIENT_SECRET",
+                "value": "[parameters('clientSecret')]"
+              },
+              {
+                "name": "TENANT_ID",
+                "value": "[parameters('tenantId')]"
+              },
+              {
+                "name": "BLOB_CONNECTION_STRING",
+                "value": "[parameters('blobConnectionString')]"
+              },
+              {
+                "name": "BLOB_CONTAINER_NAME",
+                "value": "[parameters('blobContainerName')]"
+              },
+              {
+                "name": "SUBSCRIPTION_PERIOD_MINUTES",
+                "value": "[parameters('subscriptionPeriodInMinutes')]"
+              },
+              {
+                "name": "SUBSCRIPTION_SECRET",
+                "value": "[parameters('subscriptionSecret')]"
+              },
+              {
+                "name": "CALLBACK_URL",
+                "value": "[variables('callbackUrl')]"
+              }
+            ]
+          }
+        },
+        "resources": [
+          {
+            "apiVersion": "2020-06-01",
+            "name": "web",
+            "type": "sourcecontrols",
+            "condition": "[not(empty(parameters('gitRepoUrl')))]",
+            "dependsOn": [
+              "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+            ],
+            "properties": {
+              "RepoUrl": "[parameters('gitRepoUrl')]",
+              "branch": "[parameters('gitBranch')]",
+              "IsManualIntegration": true
+            }
+          }
+        ]
+      },
+      {
+        "type": "microsoft.insights/components",
+        "apiVersion": "2020-02-02-preview",
+        "name": "[variables('applicationInsightsName')]",
+        "location": "[parameters('appInsightsLocation')]",
+        "tags": {
+          "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+        },
+        "properties": {
+          "ApplicationId": "[variables('applicationInsightsName')]",
+          "Request_Source": "IbizaWebAppExtensionCreate"
+        }
+      }
+    ]
+  }
+
