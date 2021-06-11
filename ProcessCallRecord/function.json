@@ -14,13 +14,6 @@
       "type": "http",
       "direction": "out",
       "name": "res"
-    },
-    {
-      "name": "outputBlob",
-      "direction": "out",
-      "type": "blob",
-      "path": "kdanilov-callrecord/test.json",
-      "connection": "BLOB_CONNECTION_STRING"
     }
   ]
 }
